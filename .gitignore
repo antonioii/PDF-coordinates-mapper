@@ -1,0 +1,12 @@
+.venv/
+.tokensave/
+.pytest_cache/
+__pycache__/
+*.py[cod]
+
+# Arquivos locais de exemplo e dados de teste
+saude.pdf
+atual.png
+como-quero.png
+tests/teste.json
+tests/backups/

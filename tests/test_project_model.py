@@ -35,6 +35,15 @@ def test_remove_point() -> None:
     assert project.points == {}
 
 
+def test_update_point_replaces_coordinates_without_changing_its_name() -> None:
+    project = make_project()
+    project.add_point("nome", Point(page=0, page_label=1, x=10, y=20))
+
+    project.update_point("nome", Point(page=0, page_label=1, x=30, y=40))
+
+    assert project.points["nome"].to_dict() == {"page": 0, "page_label": 1, "x": 30.0, "y": 40.0}
+
+
 def test_rename_point() -> None:
     project = make_project()
     project.add_point("nome", Point(page=0, page_label=1, x=10, y=20))

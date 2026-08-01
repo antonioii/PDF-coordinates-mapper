@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 
 from app.gui.file_dialogs import get_save_file_name
 from app.gui.pdf_viewer import OverlayMode, PdfViewer
-from app.gui.point_dialog import PointDialog
+from app.gui.point_dialog import PointDialog, PointEditDialog
 from app.models.project import Point, Project
 from app.services.json_store import JsonStore
 from app.services.pdf_renderer import PdfRenderer
@@ -41,10 +41,10 @@ class MainWindow(QMainWindow):
         self.preview_viewer = PdfViewer(OverlayMode.PREVIEW)
         self.real_viewer.clicked.connect(self.capture_point)
         self.points_list = QListWidget()
-        self.points_list.itemDoubleClicked.connect(lambda _: self.rename_selected_point())
+        self.points_list.itemDoubleClicked.connect(lambda _: self.edit_selected_point())
 
         self.setWindowTitle("PDF Coordinate Mapper")
-        self.resize(1400, 820)
+        self.resize(800, 600)
         self._build_toolbar()
         self._build_layout()
         self.refresh_page()
@@ -220,6 +220,39 @@ class MainWindow(QMainWindow):
             if not overwrite:
                 return
         self.project.rename_point(old_name, new_name.strip(), overwrite=overwrite)
+        self.save_project()
+        self.refresh_page()
+
+    def edit_selected_point(self) -> None:
+        old_name = self.selected_point_name()
+        if not old_name:
+            return
+        old_point = self.project.points[old_name]
+        dialog = PointEditDialog(old_name, old_point.x, old_point.y, old_point.page, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        new_name, x, y = dialog.values()
+        if not new_name:
+            QMessageBox.warning(self, "Nome vazio", "Informe um nome para o ponto.")
+            return
+        overwrite = False
+        if new_name != old_name and new_name in self.project.points:
+            choice = QMessageBox.question(
+                self,
+                "Nome já existe",
+                "Já existe um ponto com esse nome. Sobrescrever esse ponto?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No,
+            )
+            overwrite = choice == QMessageBox.StandardButton.Yes
+            if not overwrite:
+                return
+        if new_name != old_name:
+            self.project.rename_point(old_name, new_name, overwrite=overwrite)
+        self.project.update_point(
+            new_name,
+            Point(page=old_point.page, page_label=old_point.page_label, x=x, y=y),
+        )
         self.save_project()
         self.refresh_page()
 

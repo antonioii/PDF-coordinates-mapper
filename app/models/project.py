@@ -133,6 +133,12 @@ class Project:
         del self.points[name]
         self.touch()
 
+    def update_point(self, name: str, point: Point) -> None:
+        if name not in self.points:
+            raise KeyError(name)
+        self.points[name] = point
+        self.touch()
+
     def rename_point(self, old_name: str, new_name: str, overwrite: bool = False) -> None:
         clean_name = new_name.strip()
         if old_name not in self.points:
