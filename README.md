@@ -6,6 +6,7 @@ Aplicativo desktop em Python/PySide6 para abrir PDFs, clicar em pontos visuais e
 
 - Abrir um PDF e navegar entre páginas.
 - Aplicar zoom na visualização.
+- Comparar lado a lado a visualização **Real** com o **Preview** sincronizado.
 - Clicar no PDF para criar pontos nomeados.
 - Salvar coordenadas reais do PDF em pontos PyMuPDF.
 - Reabrir projetos existentes a partir do JSON.
@@ -53,6 +54,11 @@ python main.py
 4. Clique em `Iniciar mapeamento`.
 5. Clique em uma posição do PDF.
 6. Digite o nome do ponto e salve.
+
+O painel **Real** é o único que aceita cliques e mostra as marcações de coordenadas.
+O painel **Preview** mostra, para os pontos da página atual, como um `X` vermelho em
+Arial 12 pontos ficaria no PDF. Ele acompanha o mesmo zoom e a mesma rolagem do painel
+Real. O preview é apenas visual: não altera o PDF nem adiciona configurações ao JSON.
 
 Para abrir um projeto existente, clique em `Abrir projeto existente` e selecione o JSON. Se o PDF original não for encontrado, o app solicita um PDF substituto.
 

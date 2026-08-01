@@ -2,22 +2,25 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import QSignalBlocker, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QInputDialog,
+    QLabel,
     QListWidget,
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSplitter,
     QToolBar,
     QVBoxLayout,
     QWidget,
 )
 
 from app.gui.file_dialogs import get_save_file_name
-from app.gui.pdf_viewer import PdfViewer
+from app.gui.pdf_viewer import OverlayMode, PdfViewer
 from app.gui.point_dialog import PointDialog
 from app.models.project import Point, Project
 from app.services.json_store import JsonStore
@@ -34,13 +37,14 @@ class MainWindow(QMainWindow):
         self.current_page = 0
         self.zoom = 1.5
 
-        self.viewer = PdfViewer()
-        self.viewer.clicked.connect(self.capture_point)
+        self.real_viewer = PdfViewer(OverlayMode.REAL)
+        self.preview_viewer = PdfViewer(OverlayMode.PREVIEW)
+        self.real_viewer.clicked.connect(self.capture_point)
         self.points_list = QListWidget()
         self.points_list.itemDoubleClicked.connect(lambda _: self.rename_selected_point())
 
         self.setWindowTitle("PDF Coordinate Mapper")
-        self.resize(1180, 820)
+        self.resize(1400, 820)
         self._build_toolbar()
         self._build_layout()
         self.refresh_page()
@@ -56,8 +60,17 @@ class MainWindow(QMainWindow):
         side.addWidget(rename_button)
         side.addWidget(remove_button)
 
+        viewers = QSplitter(Qt.Orientation.Horizontal)
+        viewers.setChildrenCollapsible(False)
+        viewers.addWidget(self._viewer_panel("Real", self.real_viewer))
+        viewers.addWidget(self._viewer_panel("Preview", self.preview_viewer))
+        viewers.setStretchFactor(0, 1)
+        viewers.setStretchFactor(1, 1)
+        viewers.setSizes([1, 1])
+        self._synchronize_scrollbars()
+
         main = QHBoxLayout()
-        main.addWidget(self.viewer, 1)
+        main.addWidget(viewers, 1)
         side_widget = QWidget()
         side_widget.setLayout(side)
         side_widget.setFixedWidth(280)
@@ -66,6 +79,40 @@ class MainWindow(QMainWindow):
         container = QWidget()
         container.setLayout(main)
         self.setCentralWidget(container)
+
+    @staticmethod
+    def _viewer_panel(title: str, viewer: PdfViewer) -> QWidget:
+        label = QLabel(title)
+        label.setStyleSheet("text-align: left; font-weight: bold; padding: 0 4px;")
+        layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(label)
+        layout.addWidget(viewer, 1)
+        panel = QWidget()
+        panel.setLayout(layout)
+        return panel
+
+    def _synchronize_scrollbars(self) -> None:
+        self._link_scrollbars(
+            self.real_viewer.horizontalScrollBar(), self.preview_viewer.horizontalScrollBar()
+        )
+        self._link_scrollbars(
+            self.real_viewer.verticalScrollBar(), self.preview_viewer.verticalScrollBar()
+        )
+
+    @staticmethod
+    def _link_scrollbars(first, second) -> None:
+        def set_second(value: int) -> None:
+            with QSignalBlocker(second):
+                second.setValue(value)
+
+        def set_first(value: int) -> None:
+            with QSignalBlocker(first):
+                first.setValue(value)
+
+        first.valueChanged.connect(set_second)
+        second.valueChanged.connect(set_first)
 
     def _build_toolbar(self) -> None:
         toolbar = QToolBar("Ferramentas", self)
@@ -94,7 +141,8 @@ class MainWindow(QMainWindow):
             for name, point in self.project.points.items()
             if point.page == self.current_page
         }
-        self.viewer.set_page(pixmap, geometry, page_points)
+        self.real_viewer.set_page(pixmap, geometry, page_points)
+        self.preview_viewer.set_page(pixmap, geometry, page_points)
         self.points_list.clear()
         for name, point in page_points.items():
             self.points_list.addItem(f"{name} | x={point.x:.2f}, y={point.y:.2f}")

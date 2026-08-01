@@ -1,4 +1,4 @@
-from app.services.coordinate_mapper import RenderGeometry, pdf_to_screen, screen_to_pdf
+from app.services.coordinate_mapper import RenderGeometry, pdf_font_size_to_screen, pdf_to_screen, screen_to_pdf
 
 
 def test_screen_to_pdf_accounts_for_zoom() -> None:
@@ -35,3 +35,15 @@ def test_screen_to_pdf_clamps_to_page_bounds() -> None:
     )
 
     assert screen_to_pdf(5000, -20, geometry) == (600.0, 0.0)
+
+
+def test_pdf_font_size_scales_with_zoom_like_the_rendered_pixmap() -> None:
+    geometry = RenderGeometry(
+        zoom=1.5,
+        image_width=900,
+        image_height=1200,
+        page_width=600.0,
+        page_height=800.0,
+    )
+
+    assert pdf_font_size_to_screen(12, geometry) == 18.0

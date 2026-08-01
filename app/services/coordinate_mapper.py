@@ -26,5 +26,12 @@ def pdf_to_screen(x: float, y: float, geometry: RenderGeometry) -> tuple[float, 
     return x * geometry.zoom, y * geometry.zoom
 
 
+def pdf_font_size_to_screen(font_size: float, geometry: RenderGeometry) -> float:
+    """Converte pontos do PDF para pixels do pixmap renderizado."""
+    if geometry.zoom <= 0:
+        raise ValueError("Zoom deve ser maior que zero.")
+    return font_size * geometry.zoom
+
+
 def _clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(value, maximum))
