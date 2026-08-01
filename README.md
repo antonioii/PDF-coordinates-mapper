@@ -42,8 +42,16 @@ pip install -r requirements.txt
 
 ## Execução
 
+Windows:
+
 ```bash
 python main.py
+```
+
+Linux:
+
+```bash
+python3 main.py
 ```
 
 ## Uso
