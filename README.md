@@ -16,11 +16,23 @@ Aplicativo desktop em Python/PySide6 para abrir PDFs, clicar em pontos visuais e
 
 ## Instalação
 
-Crie e ative um ambiente virtual:
+Crie um ambiente virtual:
+
+Windows:
 
 ```bash
 python -m venv .venv
 ```
+
+Linux:
+
+```bash
+python3 -m venv .venv
+```
+
+## Ativação
+
+Ative um ambiente virtual:
 
 Windows:
 
