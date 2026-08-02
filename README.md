@@ -156,6 +156,6 @@ tests/       Testes unitários
 main.py      Entrada da aplicação
 ```
 
-## TO DO
+## To Do - A fazer
 
 - [ ] Corrigir sincronia do scrollbar horizontal nos previews
