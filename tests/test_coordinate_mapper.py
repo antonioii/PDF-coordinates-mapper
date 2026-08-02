@@ -1,4 +1,10 @@
-from app.services.coordinate_mapper import RenderGeometry, pdf_font_size_to_screen, pdf_to_screen, screen_to_pdf
+from app.services.coordinate_mapper import (
+    RenderGeometry,
+    pdf_font_size_to_screen,
+    pdf_to_screen,
+    screen_to_pdf,
+    synchronized_scroll_value,
+)
 
 
 def test_screen_to_pdf_accounts_for_zoom() -> None:
@@ -47,3 +53,9 @@ def test_pdf_font_size_scales_with_zoom_like_the_rendered_pixmap() -> None:
     )
 
     assert pdf_font_size_to_screen(12, geometry) == 18.0
+
+
+def test_synchronized_scroll_value_preserves_relative_position() -> None:
+    assert synchronized_scroll_value(25, 0, 100, 0, 200) == 50
+    assert synchronized_scroll_value(100, 0, 100, 10, 210) == 210
+    assert synchronized_scroll_value(25, 0, 0, 10, 210) == 10

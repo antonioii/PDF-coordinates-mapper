@@ -43,6 +43,10 @@ class PdfCanvas(QLabel):
         # Cada canvas mantém uma cópia independente antes de desenhar overlays.
         self._base_pixmap = QPixmap(pixmap)
         self._geometry = geometry
+        self.set_points(points)
+
+    def set_points(self, points: dict[str, Point]) -> None:
+        """Redesenha apenas os overlays, sem renderizar o PDF novamente."""
         self._points = points
         self._redraw()
 
@@ -115,3 +119,6 @@ class PdfViewer(QScrollArea):
 
     def set_page(self, pixmap: QPixmap, geometry: RenderGeometry, points: dict[str, Point]) -> None:
         self.canvas.set_page(pixmap, geometry, points)
+
+    def set_points(self, points: dict[str, Point]) -> None:
+        self.canvas.set_points(points)

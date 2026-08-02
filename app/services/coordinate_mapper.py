@@ -33,5 +33,21 @@ def pdf_font_size_to_screen(font_size: float, geometry: RenderGeometry) -> float
     return font_size * geometry.zoom
 
 
+def synchronized_scroll_value(
+    value: int,
+    source_minimum: int,
+    source_maximum: int,
+    target_minimum: int,
+    target_maximum: int,
+) -> int:
+    """Converte uma posição de rolagem para o intervalo de outro painel."""
+    source_span = source_maximum - source_minimum
+    target_span = target_maximum - target_minimum
+    if source_span <= 0 or target_span <= 0:
+        return target_minimum
+    progress = (value - source_minimum) / source_span
+    return round(target_minimum + progress * target_span)
+
+
 def _clamp(value: float, minimum: float, maximum: float) -> float:
     return max(minimum, min(value, maximum))

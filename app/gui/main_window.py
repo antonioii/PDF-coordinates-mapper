@@ -2,17 +2,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSignalBlocker, Qt
+from PySide6.QtCore import QSignalBlocker, QTimer, Qt
 from PySide6.QtGui import QAction, QKeySequence
 from PySide6.QtWidgets import (
-    QDialog,
     QHBoxLayout,
-    QInputDialog,
     QLabel,
-    QListWidget,
     QMainWindow,
-    QMessageBox,
-    QPushButton,
+    QScrollArea,
     QSplitter,
     QToolBar,
     QVBoxLayout,
@@ -20,9 +16,10 @@ from PySide6.QtWidgets import (
 )
 
 from app.gui.file_dialogs import get_save_file_name
+from app.gui.point_editor import PointEditor
 from app.gui.pdf_viewer import OverlayMode, PdfViewer
-from app.gui.point_dialog import PointDialog, PointEditDialog
 from app.models.project import Point, Project
+from app.services.coordinate_mapper import synchronized_scroll_value
 from app.services.json_store import JsonStore
 from app.services.pdf_renderer import PdfRenderer
 from app.utils.paths import open_folder
@@ -36,29 +33,35 @@ class MainWindow(QMainWindow):
         self.renderer = PdfRenderer(project.pdf_path)
         self.current_page = 0
         self.zoom = 1.5
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.setSingleShot(True)
+        self._autosave_timer.setInterval(350)
+        self._autosave_timer.timeout.connect(self.save_project)
 
         self.real_viewer = PdfViewer(OverlayMode.REAL)
         self.preview_viewer = PdfViewer(OverlayMode.PREVIEW)
         self.real_viewer.clicked.connect(self.capture_point)
-        self.points_list = QListWidget()
-        self.points_list.itemDoubleClicked.connect(lambda _: self.edit_selected_point())
+        self.point_editors: dict[str, PointEditor] = {}
 
         self.setWindowTitle("PDF Coordinate Mapper")
-        self.resize(800, 600)
+        self.resize(1200, 650)
         self._build_toolbar()
         self._build_layout()
         self.refresh_page()
 
     def _build_layout(self) -> None:
-        remove_button = QPushButton("Remover ponto")
-        remove_button.clicked.connect(self.remove_selected_point)
-        rename_button = QPushButton("Renomear ponto")
-        rename_button.clicked.connect(self.rename_selected_point)
-
         side = QVBoxLayout()
-        side.addWidget(self.points_list)
-        side.addWidget(rename_button)
-        side.addWidget(remove_button)
+        side.setContentsMargins(0, 0, 0, 0)
+        self.points_editor_layout = QVBoxLayout()
+        self.points_editor_layout.setContentsMargins(2, 2, 2, 2)
+        self.points_editor_layout.setSpacing(2)
+        self.points_editor_layout.addStretch()
+        self.points_editor_widget = QWidget()
+        self.points_editor_widget.setLayout(self.points_editor_layout)
+        self.points_scroll = QScrollArea()
+        self.points_scroll.setWidgetResizable(True)
+        self.points_scroll.setWidget(self.points_editor_widget)
+        side.addWidget(self.points_scroll)
 
         viewers = QSplitter(Qt.Orientation.Horizontal)
         viewers.setChildrenCollapsible(False)
@@ -73,7 +76,7 @@ class MainWindow(QMainWindow):
         main.addWidget(viewers, 1)
         side_widget = QWidget()
         side_widget.setLayout(side)
-        side_widget.setFixedWidth(280)
+        side_widget.setFixedWidth(370)
         main.addWidget(side_widget)
 
         container = QWidget()
@@ -103,16 +106,33 @@ class MainWindow(QMainWindow):
 
     @staticmethod
     def _link_scrollbars(first, second) -> None:
-        def set_second(value: int) -> None:
-            with QSignalBlocker(second):
-                second.setValue(value)
+        def transfer(value: int, source, target) -> None:
+            target_value = synchronized_scroll_value(
+                value,
+                source.minimum(),
+                source.maximum(),
+                target.minimum(),
+                target.maximum(),
+            )
+            with QSignalBlocker(target):
+                target.setValue(target_value)
 
-        def set_first(value: int) -> None:
-            with QSignalBlocker(first):
-                first.setValue(value)
+        def sync_to_second(value: int) -> None:
+            transfer(value, first, second)
 
-        first.valueChanged.connect(set_second)
-        second.valueChanged.connect(set_first)
+        def sync_to_first(value: int) -> None:
+            transfer(value, second, first)
+
+        def resync_from_first(*_) -> None:
+            QTimer.singleShot(0, lambda: sync_to_second(first.value()))
+
+        def resync_from_second(*_) -> None:
+            QTimer.singleShot(0, lambda: sync_to_first(second.value()))
+
+        first.valueChanged.connect(sync_to_second)
+        second.valueChanged.connect(sync_to_first)
+        first.rangeChanged.connect(resync_from_first)
+        second.rangeChanged.connect(resync_from_second)
 
     def _build_toolbar(self) -> None:
         toolbar = QToolBar("Ferramentas", self)
@@ -143,118 +163,96 @@ class MainWindow(QMainWindow):
         }
         self.real_viewer.set_page(pixmap, geometry, page_points)
         self.preview_viewer.set_page(pixmap, geometry, page_points)
-        self.points_list.clear()
-        for name, point in page_points.items():
-            self.points_list.addItem(f"{name} | x={point.x:.2f}, y={point.y:.2f}")
+        self._rebuild_point_editors(page_points)
         self.statusBar().showMessage(
             f"Projeto: {self.project.project_name} | PDF: {Path(self.project.pdf_path).name} | "
             f"Página {self.current_page + 1}/{self.renderer.page_count} | Zoom {self.zoom:.2f}x"
         )
 
     def capture_point(self, x: float, y: float) -> None:
-        dialog = PointDialog(self.current_page, x, y, self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        name = dialog.point_name()
-        if not name:
-            QMessageBox.warning(self, "Nome vazio", "Informe um nome para o ponto.")
-            return
+        name = self._next_point_name()
         point = Point(page=self.current_page, page_label=self.current_page + 1, x=x, y=y)
-        self.add_point_with_duplicate_handling(name, point)
-
-    def add_point_with_duplicate_handling(self, name: str, point: Point) -> None:
-        if name not in self.project.points:
-            self.project.add_point(name, point)
-            self.save_project()
-            self.refresh_page()
-            return
-        choice = QMessageBox.question(
-            self,
-            "Nome já existe",
-            "Já existe um ponto com esse nome. Deseja sobrescrever apenas esse ponto?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.No,
-        )
-        if choice == QMessageBox.StandardButton.Yes:
-            self.project.add_point(name, point, overwrite=True)
-            self.save_project()
-            self.refresh_page()
-        elif choice == QMessageBox.StandardButton.No:
-            new_name, ok = QInputDialog.getText(self, "Salvar com outro nome", "Novo nome do ponto:")
-            if ok and new_name.strip():
-                self.add_point_with_duplicate_handling(new_name.strip(), point)
-
-    def selected_point_name(self) -> str | None:
-        item = self.points_list.currentItem()
-        if item is None:
-            return None
-        return item.text().split(" | ", 1)[0]
-
-    def remove_selected_point(self) -> None:
-        name = self.selected_point_name()
-        if not name:
-            return
-        choice = QMessageBox.question(self, "Remover ponto", f"Remover '{name}'?")
-        if choice == QMessageBox.StandardButton.Yes:
-            self.project.remove_point(name)
-            self.save_project()
-            self.refresh_page()
-
-    def rename_selected_point(self) -> None:
-        old_name = self.selected_point_name()
-        if not old_name:
-            return
-        new_name, ok = QInputDialog.getText(self, "Renomear ponto", "Novo nome:", text=old_name)
-        if not ok or not new_name.strip() or new_name.strip() == old_name:
-            return
-        overwrite = False
-        if new_name.strip() in self.project.points:
-            choice = QMessageBox.question(
-                self,
-                "Nome já existe",
-                "Já existe um ponto com esse nome. Sobrescrever esse ponto?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            overwrite = choice == QMessageBox.StandardButton.Yes
-            if not overwrite:
-                return
-        self.project.rename_point(old_name, new_name.strip(), overwrite=overwrite)
-        self.save_project()
+        self.project.add_point(name, point)
         self.refresh_page()
+        self._schedule_save()
+        self.point_editors[name].focus_name()
 
-    def edit_selected_point(self) -> None:
-        old_name = self.selected_point_name()
-        if not old_name:
+    def _rebuild_point_editors(self, page_points: dict[str, Point]) -> None:
+        while self.points_editor_layout.count() > 1:
+            item = self.points_editor_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+        self.point_editors.clear()
+
+        page_size = self.project.page_sizes[self.current_page]
+        for name, point in page_points.items():
+            editor = PointEditor(name, point.x, point.y, page_size.width, page_size.height)
+            editor.remove_requested.connect(self.remove_point)
+            editor.name_changed.connect(self.rename_point_inline)
+            editor.name_editing_finished.connect(self.finish_renaming_point)
+            editor.coordinates_changed.connect(self.update_point_coordinates)
+            self.points_editor_layout.insertWidget(self.points_editor_layout.count() - 1, editor)
+            self.point_editors[name] = editor
+
+    def _next_point_name(self) -> str:
+        index = 1
+        while f"ponto_{index}" in self.project.points:
+            index += 1
+        return f"ponto_{index}"
+
+    def rename_point_inline(self, old_name: str, new_name: str) -> None:
+        editor = self.point_editors.get(old_name)
+        if editor is None or new_name == old_name:
+            editor and editor.set_name_error(False)
             return
-        old_point = self.project.points[old_name]
-        dialog = PointEditDialog(old_name, old_point.x, old_point.y, old_point.page, self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
+        if not new_name or new_name in self.project.points:
+            editor.set_name_error(True)
             return
-        new_name, x, y = dialog.values()
-        if not new_name:
-            QMessageBox.warning(self, "Nome vazio", "Informe um nome para o ponto.")
+        self.project.rename_point(old_name, new_name)
+        editor.set_point_name(new_name)
+        self.point_editors.pop(old_name)
+        self.point_editors[new_name] = editor
+        self._refresh_overlays()
+        self._schedule_save()
+
+    def finish_renaming_point(self, name: str) -> None:
+        editor = self.point_editors.get(name)
+        if editor is not None and editor.name_input.text().strip() != name:
+            editor.restore_valid_name()
+
+    def update_point_coordinates(self, name: str, x: float, y: float) -> None:
+        point = self.project.points.get(name)
+        if point is None:
             return
-        overwrite = False
-        if new_name != old_name and new_name in self.project.points:
-            choice = QMessageBox.question(
-                self,
-                "Nome já existe",
-                "Já existe um ponto com esse nome. Sobrescrever esse ponto?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            overwrite = choice == QMessageBox.StandardButton.Yes
-            if not overwrite:
-                return
-        if new_name != old_name:
-            self.project.rename_point(old_name, new_name, overwrite=overwrite)
         self.project.update_point(
-            new_name,
-            Point(page=old_point.page, page_label=old_point.page_label, x=x, y=y),
+            name,
+            Point(page=point.page, page_label=point.page_label, x=x, y=y),
         )
-        self.save_project()
-        self.refresh_page()
+        self._refresh_overlays()
+        self._schedule_save()
+
+    def remove_point(self, name: str) -> None:
+        if name not in self.project.points:
+            return
+        self.project.remove_point(name)
+        self._refresh_overlays()
+        editor = self.point_editors.pop(name, None)
+        if editor is not None:
+            editor.deleteLater()
+        self._schedule_save()
+
+    def _refresh_overlays(self) -> None:
+        page_points = {
+            name: point
+            for name, point in self.project.points.items()
+            if point.page == self.current_page
+        }
+        self.real_viewer.set_points(page_points)
+        self.preview_viewer.set_points(page_points)
+
+    def _schedule_save(self) -> None:
+        self._autosave_timer.start()
 
     def previous_page(self) -> None:
         if self.current_page > 0:
@@ -299,5 +297,8 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "Resumo exportado", f"Resumo salvo em:\n{file_name}")
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        if self._autosave_timer.isActive():
+            self._autosave_timer.stop()
+            self.save_project()
         self.renderer.close()
         super().closeEvent(event)

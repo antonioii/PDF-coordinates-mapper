@@ -73,12 +73,17 @@ python3 main.py
 3. Escolha onde salvar o JSON.
 4. Clique em `Iniciar mapeamento`.
 5. Clique em uma posição do PDF.
-6. Digite o nome do ponto e salve.
+6. Edite diretamente, no painel à direita, o nome e as coordenadas do ponto.
 
 O painel **Real** é o único que aceita cliques e mostra as marcações de coordenadas.
 O painel **Preview** mostra, para os pontos da página atual, como um `X` vermelho em
 Arial 12 pontos ficaria no PDF. Ele acompanha o mesmo zoom e a mesma rolagem do painel
 Real. O preview é apenas visual: não altera o PDF nem adiciona configurações ao JSON.
+
+Cada clique cria imediatamente uma linha com um nome provisório (`ponto_1`, `ponto_2`,
+etc.). Use o campo de texto para renomeá-la, os spinboxes `x` e `y` para ajustar sua
+posição e o botão `×` para remover o ponto. As marcações dos dois painéis são atualizadas
+em tempo real; o JSON é salvo automaticamente após uma breve pausa na edição.
 
 Para abrir um projeto existente, clique em `Abrir projeto existente` e selecione o JSON. Se o PDF original não for encontrado, o app solicita um PDF substituto.
 
