@@ -8,7 +8,9 @@ Uma versão portátil, pronta para uso no Windows 10 ou superior, está disponí
 [`portable/windows/PDF-Coordinates-Mapper.exe`](portable/windows/PDF-Coordinates-Mapper.exe).
 Baixe o arquivo e execute-o; não é necessário instalar Python nem as dependências do projeto.
 
-## Recursos
+Caso queira rodar o código fonte no seu sistema e não usar o executável pronto, siga a instalação abaixo.
+
+## Recursos disponíveis
 
 - Abrir um PDF e navegar entre páginas.
 - Aplicar zoom na visualização.
@@ -20,7 +22,7 @@ Baixe o arquivo e execute-o; não é necessário instalar Python nem as dependê
 - Exportar um resumo dos pontos mapeados.
 - No WSL, abrir o seletor nativo de arquivos do Windows para evitar bugs do diálogo Qt/Linux.
 
-## Instalação
+## Instalação do código
 
 Crie um ambiente virtual:
 
