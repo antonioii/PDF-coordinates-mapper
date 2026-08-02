@@ -2,6 +2,12 @@
 
 Aplicativo desktop em Python/PySide6 para abrir PDFs, clicar em pontos visuais e salvar coordenadas nomeadas em JSON estruturado.
 
+## Standalone para Windows
+
+Uma versão portátil, pronta para uso no Windows 10 ou superior, está disponível em
+[`portable/windows/PDF-Coordinates-Mapper.exe`](portable/windows/PDF-Coordinates-Mapper.exe).
+Baixe o arquivo e execute-o; não é necessário instalar Python nem as dependências do projeto.
+
 ## Recursos
 
 - Abrir um PDF e navegar entre páginas.
@@ -147,3 +153,7 @@ app/
 tests/       Testes unitários
 main.py      Entrada da aplicação
 ```
+
+## TO DO
+
+- [ ] Corrigir sincronia do scrollbar horizontal nos previews
